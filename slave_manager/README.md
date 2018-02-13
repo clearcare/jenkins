@@ -1,6 +1,4 @@
 ## How it Works ##
-- TODO: show startup script on slave
-- TODO: add more sg of master
 - TODO: show slave manager job
 - TOOD: see if we can disable remoting option
 ### Prerequisites: ###
@@ -20,7 +18,7 @@ staticMethod java.lang.System gc
 - AnsiColor plugin (optional) for pretty colors in the output.
 
 - jenkins-master security group.  Needs this inline policy:
-```
+```json
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -39,8 +37,9 @@ staticMethod java.lang.System gc
 
 - jenkins-slave needs to run the swarm jar on boot. You can do it like this:
   - create an executable file, /var/lib/cloud/scripts/per-boot/start_swarm.sh with the contents:
-  ```
-  #!/bin/bash
+
+```bash
+#!/bin/bash
 export MY_PASSWORD=`aws ssm --region us-east-2 get-parameter --name jenkins_slave --with-decryption | jq --raw-output .Parameter.Value`
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region)
@@ -63,7 +62,7 @@ java -jar /jenkins/swarm-client-3.5.jar \
  -disableSslVerification \
  -username '[JENKINS_USER_NAME]' \
  -passwordEnvVariable MY_PASSWORD &> /var/log/swarm.log &
-  ```
+```
 
 - EBS Backed Slaves
 
