@@ -161,5 +161,5 @@ See this on how to do this: [How-to-enable-cross-account-access](https://blogs.a
 ### Why id_rsa and not username/password when using jenkins-cli.jar? ###
 Bottom line, there is a bug in Jenkins which forces you to use id_rsa file:
 [JENKINS-12543](https://issues.jenkins-ci.org/browse/JENKINS-12543)
-To apply an public_key to your account, go to [JENKINS_URL]/me and click on "configure".
+To apply a public_key to your account, go to [JENKINS_URL]/me and click on "configure".
 You'll see a place to add your public key.  Plus, it's probably safer to use id_rsa.

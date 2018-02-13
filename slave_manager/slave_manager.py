@@ -1193,9 +1193,7 @@ def parseArgs():
 if __name__ == '__main__':
     # TODO: Convert to boto.
     # TODO: Print out time left before termination.
-    # TODO: Use equivalent of static method variables for printing once.
     # TODO: Handle 'thrashing' launching instances that do not connect, and re-creating.
-    # TODO: If slave is running, but not connected to master (i.e. supervisor failed to start), AND is wrong ami-id, instance does not get destroyed.
 
     args = parseArgs()
     start_time = datetime.datetime.now()
@@ -1212,15 +1210,19 @@ if __name__ == '__main__':
                                 max_spot_slaves=args.max_num_of_spot_slaves_in_env,
                                 slave_name=args.slave_name, owner_email=args.owner_email)
             stopSlaves(jenkins_queue=jenkins_json)
-        # Every 15 seconds update your SG for prod and apse2 instances:
+
+        # Every 15 seconds update your SG for prod instances:
         if i % 3 == 0:
             updateSecurityGroups(security_group_to_tweak=g_env_map['jenkins-master']['jenkins-master-sg-id'],
                                  required_ip_list=args.required_ip_list,
                                  slave_name=args.slave_name,
                                  jenkins_master_region=args.jenkins_master_region)
 
+        # Every 30 seconds or so, run the garbage collector:
         if i % 6 == 0:
             runGc()
+
+        # Every few minutes or so, re-set termination policy and check SQS:
         if i % 15 == 0:
             if jenkins_json is not None:
                 printStats(jenkins_queue=jenkins_json)
