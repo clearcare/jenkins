@@ -886,7 +886,7 @@ def updateSecurityGroups(security_group_to_tweak=None, required_ip_list=[], slav
     sg = j['SecurityGroups'][0]
 
     # The required_ip_list is a list of PORT:IP/CID.  Lets massage the prod ip addresses by adding port and cid:
-    all_required_ip_list = required_ip_list + ['443:' + ip + '/32' for ip in prod_ip_addresses]
+    all_required_ip_list = required_ip_list + ['30001:' + ip + '/32' for ip in prod_ip_addresses]
 
     # Now lets get a list of IP addresses from bitbucket:
     say('Checking IP address of github.com to make sure it can talk to Jenkins...')

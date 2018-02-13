@@ -1,13 +1,12 @@
 ## How it Works ##
-- TODO: show slave manager job
-- TOOD: see if we can disable remoting option
+
 ### Prerequisites: ###
 
 - Configre your "master" node with the label "master_node"
 - Install Swarm Plugin: [https://wiki.jenkins-ci.org/display/JENKINS/Swarm+Plugin](https://wiki.jenkins-ci.org/display/JENKINS/Swarm+Plugin)
 - Install Groovy Plugin: [https://wiki.jenkins-ci.org/display/JENKINS/Groovy+plugin](https://wiki.jenkins-ci.org/display/JENKINS/Groovy+plugin)
-  - Needed to run System Groovy commands to run the Garbage Collector
-  - Garbage Collector needs these pre-approved under [JENKINS_URL]/scriptApproval/
+  - Needed to run System Groovy commands to run the Garbage Collector job.
+  - Garbage Collector job needs these pre-approved under [JENKINS_URL]/scriptApproval/
 ```
 method groovy.lang.Script println java.lang.Object
 method java.lang.Runtime freeMemory
@@ -17,7 +16,7 @@ staticMethod java.lang.System gc
 ```
 - AnsiColor plugin (optional) for pretty colors in the output.
 
-- jenkins-master security group.  Needs this inline policy:
+- jenkins-master security group needs this inline policy:
 ```json
 {
     "Version": "2012-10-17",
@@ -26,23 +25,25 @@ staticMethod java.lang.System gc
             "Sid": "Stmt1447855754000",
             "Effect": "Allow",
             "Action": "sts:AssumeRole",
-            "Resource": "arn:aws:iam::123456789012:role/jenkins_master"
+            "Resource": "arn:aws:iam::[AWS_ACCOUNT_ID]:role/jenkins_master"
         }
     ]
 }
 ```
 - jenkins-master also needs the IAM policy to create instances.
 
+- jenkins-master needs Agent port 30001 open under [JENKINS_URL]/configureSecurity
+
 - jenkins-slave needs the minimal IAM policy needed to run your jobs. ReadOnlyAccess policy, for instance.
 
 - jenkins-slave needs to run the swarm jar on boot. You can do it like this:
-  - create an executable file, /var/lib/cloud/scripts/per-boot/start_swarm.sh with the contents:
+  - create an executable file, /var/lib/cloud/scripts/per-boot/start_swarm.sh, with the contents:
 
 ```bash
 #!/bin/bash
-export MY_PASSWORD=`aws ssm --region us-east-2 get-parameter --name jenkins_slave --with-decryption | jq --raw-output .Parameter.Value`
-INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region)
+export MY_PASSWORD=`aws ssm --region ${REGION} get-parameter --name jenkins_slave --with-decryption | jq --raw-output .Parameter.Value`
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 SLAVE_DATA=`aws ec2 describe-tags --filters "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=slave_data" --region=$REGION --output=text | cut -f5`
 # Now get All elements from slave_data that we need:
 MASTER_URL=`echo $SLAVE_DATA | jq --raw-output .jenkins_url`
@@ -51,7 +52,7 @@ SLAVE_LABELS=`echo $SLAVE_DATA | jq --raw-output .slave_labels`
 NUM_OF_EXECUTORS=`echo $SLAVE_DATA | jq --raw-output .num_of_executors`
 
 java -jar /jenkins/swarm-client-3.5.jar \
- -name "test" \
+ -name "${SLAVE_LABELS}-${INSTANCE_ID}" \
  -description "$DESCRIPTION" \
  -executors $NUM_OF_EXECUTORS \
  -fsroot /jenkins/ws \
@@ -64,11 +65,40 @@ java -jar /jenkins/swarm-client-3.5.jar \
  -passwordEnvVariable MY_PASSWORD &> /var/log/swarm.log &
 ```
 
-- EBS Backed Slaves
+- The Slaves should be EBS backed, so that we can start/stop them, rather than terminating.
 
 You'll need 2 jobs:
-- FreeSytle project called "util_slave_manager". Set it to run on "master_node".
-- FreeSytle project called "util-slave-manager-garbage-collector". Set it to run on "master_node".
+- FreeSytle project called "util_slave_manager". Set it to run on "master_node" every 5 minutes.  It takes ~30m to run, so with this set up, it will essetially run 24/7.
+This is the contents of the shell script to run:
+
+```bash
+# Download the environment.json file from s3:
+aws s3 cp s3://[YOUR_PRIVATE_BUCKET]/environment.json .
+# Download the id_rsa file needed to run jenkins cli jar file:
+aws s3 cp s3://[YOUR_PRIVATE_BUCKET]/id_rsa .
+
+# This is the AMI to use across all environments:
+AMI_ID=[SLAVE_AMI]
+
+python2.7 slave_manager/slave_manager.py \
+--id_rsa id_rsa \
+--owner_email "[OWNER_EMAIL]" \
+--aws_sqs_account_id 784548236052 \
+--aws_sqs_region us-east-2 \
+--url ${JENKINS_URL} \
+--max_num_of_slaves_in_env 2 \
+--max_spot_price 0.2 \
+--ami_ids my-test-env:${AMI_ID} \
+--loop_counter 300 \
+--jenkins_master_region us-east-2 \
+--required_ip_list \
+443:0.0.0.0/0 \
+80:0.0.0.0/0 \
+8080:0.0.0.0/0 \
+22:[SPECIFIC_IP]/32
+```
+
+- FreeSytle project called "util-slave-manager-garbage-collector". Set it to run on "master_node".  It should run a system groovy script called "run_gc.groovy"
 
 
 ### How it Works in a NutShell: ###
