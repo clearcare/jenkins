@@ -25,7 +25,7 @@ def parseArgs():
     parser.add_argument('--key_pair_name', help='AWS key name.', default='jenkins.cloud')
     parser.add_argument('--ssh_user', help='ssh user.', default='ec2-user')
     parser.add_argument('--target_env', help='The target env to create instance in. Usually "eod-us-west-2".',
-                        choices=g_env_map.keys(), default='eod-us-west-2')
+                        choices=g_env_map['environments'].keys(), default='eod-us-west-2')
     parser.add_argument('--volume_type', help='The EBS volume type.', choices=['gp2', 'standard'], default='gp2')
     parser.add_argument('--volume_size', help='The EBS volume size in GB. If none specified, the size of the snapshot is used.', default=None)
     parser.add_argument('--instance_type', help='The size of the instance.', default='t2.medium')
@@ -333,7 +333,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     snapshot_id = None
-    subnet_id = random.choice(g_env_map[g_args.target_env]['vpcsubnet'])['id']
+    subnet_id = random.choice(g_env_map['environments'][g_args.target_env]['vpcsubnet'])['id']
     az = getAzFromSubnet(target_env=g_args.target_env, subnet_id=subnet_id)
     if b_new_instance is False:
         say('Cloning existing jenkins master from: '.format(g_args.current_master_ip))
@@ -352,14 +352,14 @@ if __name__ == "__main__":
     volume_id, volume_size = createVolume(snapshot_id=snapshot_id,
                                           volume_type=g_args.volume_type,
                                           volume_size=g_args.volume_size,
-                                          region=g_env_map[g_args.target_env]['region'],
+                                          region=g_env_map['environments'][g_args.target_env]['region'],
                                           az=az)
 
     # Create new jenkins master instance:
     tags = {'role': 'jenkins-master', 'service': 'jenkins-master', 'owner': g_args.owner_email,
             'Name': 'jenkins-master', 'environment': 'eod'}
-    instance_profile = '\'{{"Arn":"arn:aws:iam::{}:instance-profile/{}"}}\''.format(g_env_map[g_args.target_env]['account-id'],
-                                                                                    g_env_map['jenkins-master']['jenkins-master-sg-name'])
+    instance_profile = '\'{{"Arn":"arn:aws:iam::{}:instance-profile/{}"}}\''.format(g_env_map['environments'][g_args.target_env]['account-id'],
+                                                                                    g_env_map['jenkins-master']['jenkins-master-iam-role'])
 
     new_instance = createInstance(ami_id=g_args.ami_id,
                                   instance_type=g_args.instance_type,
@@ -374,10 +374,10 @@ if __name__ == "__main__":
                                   debug=g_args.debug)
 
     # Attach volume to this instance (we reset the new_instance variable because the EBS vol has been attached):
-    new_instance = attacheVolume(volume_id=volume_id, instance_id=str(new_instance['InstanceId']), region=g_env_map[g_args.target_env]['region'])
+    new_instance = attacheVolume(volume_id=volume_id, instance_id=str(new_instance['InstanceId']), region=g_env_map['environments'][g_args.target_env]['region'])
 
     # Set termination of ebs volume on termination of instance:
-    setTerminationPolicy(instance=new_instance, region=g_env_map[g_args.target_env]['region'])
+    setTerminationPolicy(instance=new_instance, region=g_env_map['environments'][g_args.target_env]['region'])
 
     # Run ssh command on that box:
     g_new_instance_ip_address = new_instance['PublicIpAddress']
